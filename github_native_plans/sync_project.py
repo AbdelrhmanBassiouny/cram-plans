@@ -65,7 +65,7 @@ FIELDS = [
     FieldDefinition("Session", "TEXT", "session_link"),
     FieldDefinition("Track", "SINGLE_SELECT", "track"),
     FieldDefinition("Branch", "TEXT", "branch"),
-    FieldDefinition("Pull request", "NUMBER", "pull_request"),
+    FieldDefinition("Pull request", "TEXT", "pull_request_url"),
     FieldDefinition("CI", "SINGLE_SELECT", "checks"),
 ]
 """Every field the sync owns."""
@@ -144,13 +144,14 @@ class ProjectSync:
         return self.find_project()
 
     def ensure_fields(self, project: dict[str, Any], options: dict[str, list[tuple[str, str]]]) -> dict[str, Any]:
-        """The project with every field, a single-select one recreated when its options differ."""
+        """The project with every field, one recreated when its type or, for a single-select one, its options differ."""
         fields = {entry["name"]: entry for entry in project["fields"]["nodes"] if entry}
         changed = False
         for definition in FIELDS:
             existing = fields.get(definition.name)
             wanted = options.get(definition.name)
-            if existing and (wanted is None or [option["name"] for option in existing.get("options", [])] == [option for option, _ in wanted]):
+            same_type = existing is not None and existing["dataType"] == definition.data_type
+            if same_type and (wanted is None or [option["name"] for option in existing.get("options", [])] == [option for option, _ in wanted]):
                 continue
             if existing:
                 self.query("delete_field", field=existing["id"])
