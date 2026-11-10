@@ -1,10 +1,12 @@
-# Sandbox: plans as issues, shown in a GitHub Project. Lives only on the
-# github-native-plans branch; nothing on main or the personal-notes branch changes.
+# Plans as issues in this repository, shown in a GitHub Project. Reads plan.yaml
+# from the code repository's personal-notes branch and never writes there.
 name: GitHub-native plans (sandbox)
 
 on:
   push:
-    branches: [github-native-plans]
+    branches: [main]
+  issues:
+    types: [opened, edited, closed, reopened, labeled, unlabeled, deleted]
   workflow_dispatch:
     inputs:
       steps:
@@ -29,16 +31,19 @@ permissions:
   issues: write
 
 env:
+  CODE_REPOSITORY: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
   PLANS: ${{ inputs.plans || 'rdr-core-engine rdr-engine-extensions rdr-expert-framework rdr-explanation rdr-interface-and-decorator' }}
   PROJECT_TITLE: CRAM plans (GitHub-native sandbox)
 
 jobs:
   plans:
+    if: github.event_name != 'issues' || contains(github.event.issue.labels.*.name, 'github-native-sandbox')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
         with:
+          repository: ${{ env.CODE_REPOSITORY }}
           ref: claude/personal-notes
           path: notes
           sparse-checkout: .claude/personal/plans
@@ -47,11 +52,11 @@ jobs:
           python-version: "3.12"
       - run: pip install pyyaml==6.0.2
       - name: Import plans into issues
-        if: inputs.steps != 'sync-only'
+        if: github.event_name == 'push' || inputs.steps == 'import-and-sync'
         env:
           GITHUB_TOKEN: ${{ github.token }}
           REFRESH: ${{ inputs.refresh_bodies && '--refresh-bodies' || '' }}
-        run: python github_native_plans/import_plans.py --plans-directory notes/.claude/personal/plans $PLANS $REFRESH
+        run: python github_native_plans/import_plans.py --code-repository "$CODE_REPOSITORY" --plans-directory notes/.claude/personal/plans $PLANS $REFRESH
       - name: Sync the project from the issues
         env:
           GITHUB_TOKEN: ${{ github.token }}

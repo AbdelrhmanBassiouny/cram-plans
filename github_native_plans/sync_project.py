@@ -23,7 +23,7 @@ QUERIES = Path(__file__).parent / "queries"
 BRANCH_LINE = re.compile(r"^- \*\*Branch:\*\* \[`([^`]+)`\]", re.MULTILINE)
 """The branch line of an item issue's body."""
 
-PULL_REQUEST_LINE = re.compile(r"^- \*\*Pull request:\*\* #(\d+)", re.MULTILINE)
+PULL_REQUEST_LINE = re.compile(r"^- \*\*Pull request:\*\* (?:[\w.-]+/[\w.-]+)?#(\d+)", re.MULTILINE)
 """The pull request line of an item issue's body."""
 
 STATUS_FIELD = "Plan status"

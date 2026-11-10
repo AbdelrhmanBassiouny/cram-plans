@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from string import Template
@@ -27,6 +28,9 @@ from plans import (
 
 TEMPLATES = Path(__file__).parent / "templates"
 """Directory of the issue body templates."""
+
+BARE_REFERENCE = re.compile(r"(?<![\w/])#(\d+)\b")
+"""An issue or pull request reference without a repository."""
 
 LABEL_COLORS = {"sandbox": "0e8a16", "plan": "1d76db", "status": "fbca04", "track": "c5def5"}
 """Hex colour of each label family."""
@@ -94,6 +98,8 @@ class PlanImporter:
 
     issues: SandboxIssues
     """The repository's sandbox issues."""
+    code_repository: str
+    """``owner/name`` of the repository the plans' branches, pull requests and notes live in."""
     notes_branch: str
     """Branch the plans' roadmaps are read from."""
     refresh_bodies: bool
@@ -148,11 +154,11 @@ class PlanImporter:
             return
         repository = self.issues.repository
         tracks = "\n".join(f"- `{track.label}` - {track.name} ({track.wave})" for track in plan.tracks)
-        former = f"#{plan.former_tracking_issue}" if plan.former_tracking_issue else "-"
+        former = f"{self.code_repository}#{plan.former_tracking_issue}" if plan.former_tracking_issue else "-"
         body = Template((TEMPLATES / "plan_issue.md").read_text()).substitute(
             marker=plan.marker,
-            description=plan.description,
-            roadmap_url=f"https://github.com/{repository}/blob/{self.notes_branch}/.claude/personal/plans/{plan.identifier}/roadmap.md",
+            description=self.qualify_references(plan.description),
+            roadmap_url=f"https://github.com/{self.code_repository}/blob/{self.notes_branch}/.claude/personal/plans/{plan.identifier}/roadmap.md",
             former_tracking_issue=former,
             tracks=tracks,
             repository=repository,
@@ -167,21 +173,25 @@ class PlanImporter:
         repository = self.issues.repository
         blocked_by = [f"#{self.issues.by_key[dependency]['number']}" for dependency in self.known_dependencies(item)]
         blocked_by += [f"`{dependency}` (not imported)" for dependency in item.dependencies if dependency not in self.issues.by_key]
-        branch = f"[`{item.branch}`](https://github.com/{repository}/tree/{item.branch})" if item.branch else "-"
+        branch = f"[`{item.branch}`](https://github.com/{self.code_repository}/tree/{item.branch})" if item.branch else "-"
         body = Template((TEMPLATES / "item_issue.md").read_text()).substitute(
             marker=item.marker,
             branch=branch,
-            pull_request=f"#{item.pull_request_number}" if item.pull_request_number else "-",
+            pull_request=f"{self.code_repository}#{item.pull_request_number}" if item.pull_request_number else "-",
             blocked_by=", ".join(blocked_by) or "-",
             session=f"[session]({item.session})" if item.session else "-",
-            notes=item.notes or "-",
-            blockers="\n".join(f"- {blocker}" for blocker in item.blockers) or "-",
+            notes=self.qualify_references(item.notes) or "-",
+            blockers="\n".join(f"- {self.qualify_references(blocker)}" for blocker in item.blockers) or "-",
             repository=repository,
             number=self.issues.by_key[item.key]["number"],
             plan_identifier=item.plan_identifier,
             item_identifier=item.identifier,
         )
         self.issues.write(item.key, item.title, self.item_labels(item), body)
+
+    def qualify_references(self, text: str) -> str:
+        """``text`` with each bare ``#123`` pointed at the code repository, where it was written."""
+        return BARE_REFERENCE.sub(lambda match: f"{self.code_repository}#{match.group(1)}", text)
 
     def known_dependencies(self, item: PlanItem) -> list[str]:
         """The item's dependencies that have an issue."""
@@ -204,6 +214,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("plans", nargs="+", help="plan ids to import")
     parser.add_argument("--plans-directory", type=Path, required=True)
+    parser.add_argument("--code-repository", required=True, help="owner/name the plans' branches and pull requests live in")
     parser.add_argument("--notes-branch", default="claude/personal-notes")
     parser.add_argument("--refresh-bodies", action="store_true")
     parser.add_argument("--dry-run", action="store_true", help="print the issues instead of writing them")
@@ -211,7 +222,7 @@ def main() -> None:
     client = None if arguments.dry_run else GitHubClient(os.environ["GITHUB_TOKEN"])
     issues = SandboxIssues(client, os.environ.get("GITHUB_REPOSITORY", "owner/repository"))
     plans = [Plan.read(arguments.plans_directory, identifier) for identifier in arguments.plans]
-    PlanImporter(issues, arguments.notes_branch, arguments.refresh_bodies).run(plans)
+    PlanImporter(issues, arguments.code_repository, arguments.notes_branch, arguments.refresh_bodies).run(plans)
 
 
 if __name__ == "__main__":

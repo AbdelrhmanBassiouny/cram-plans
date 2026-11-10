@@ -1,9 +1,11 @@
 # GitHub-native plans (sandbox)
 
 A trial of keeping plans in GitHub itself instead of `plan.yaml` and the plan site, using
-the five RDR plans. Nothing here touches `main`, the code branches, the
-`claude/personal-notes` branch or basstler: `plan.yaml` stays as it is and basstler keeps
-working from it.
+the five RDR plans of
+[cognitive_robot_abstract_machine](https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine).
+The plan issues live here; branches and pull requests stay in the code repository. This
+repository only reads that repository's `plan.yaml` files, so basstler keeps working from
+them unchanged.
 
 ## What lives where
 
@@ -33,9 +35,9 @@ The workflow `.github/workflows/github-native-plans.yml` has two steps:
    *Branch* and *Pull request* from the issue. It writes only values that differ, so it
    can be re-run at any time.
 
-A push to this branch runs both. After an issue changes, run *sync-only* from the Actions
-tab or ask Claude to dispatch it. Issue events cannot start this workflow, because GitHub
-starts `issues` workflows only from the default branch.
+A push to `main` runs both. Every change to a sandbox issue (opened, edited, labelled,
+closed, reopened) runs the sync, so the project follows the issues within a minute or
+so. *sync-only* and *import-and-sync* can also be started from the Actions tab.
 
 ## Working with it
 
