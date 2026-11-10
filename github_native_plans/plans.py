@@ -72,6 +72,58 @@ STATUS_COLORS = {
 """Project colour of each status option."""
 
 
+# %% next step
+class NextStep(StrEnum):
+    """What to do next with an item, worded like the plan site's action buttons."""
+
+    RESUME = "Resume"
+    RESOLVE = "Resolve"
+    START_NOW = "Start now"
+    RECONSIDER = "Reconsider"
+    WAITING = "Waiting"
+    DONE = "Done"
+
+    @classmethod
+    def of(cls, status: ItemStatus, waits_for_blockers: bool) -> NextStep:
+        """The step an item with ``status`` calls for."""
+        match status:
+            case ItemStatus.IN_PROGRESS:
+                return cls.RESUME
+            case ItemStatus.BLOCKED:
+                return cls.RESOLVE
+            case ItemStatus.DEFERRED:
+                return cls.RECONSIDER
+            case ItemStatus.DONE:
+                return cls.DONE
+            case ItemStatus.NOT_STARTED:
+                return cls.WAITING if waits_for_blockers else cls.START_NOW
+
+    @property
+    def recommendation_priority(self) -> int | None:
+        """Lower is recommended first: finish started work, then unblock, then start; ``None`` is never recommended."""
+        return {NextStep.RESUME: 1, NextStep.RESOLVE: 2, NextStep.START_NOW: 3}.get(self)
+
+    @property
+    def skill(self) -> str | None:
+        """The basstler skill that takes this step."""
+        if self is NextStep.START_NOW:
+            return "/plan-item-kickoff"
+        if self in (NextStep.RESUME, NextStep.RESOLVE, NextStep.RECONSIDER):
+            return "/plan-item-resolve"
+        return None
+
+
+NEXT_STEP_COLORS = {
+    NextStep.RESUME: "YELLOW",
+    NextStep.RESOLVE: "RED",
+    NextStep.START_NOW: "GREEN",
+    NextStep.RECONSIDER: "PURPLE",
+    NextStep.WAITING: "GRAY",
+    NextStep.DONE: "BLUE",
+}
+"""Project colour of each next-step option."""
+
+
 # %% plan model
 @dataclass
 class Track:

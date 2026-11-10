@@ -1,16 +1,28 @@
 query {
   viewer {
     id
+    databaseId
     login
     projectsV2(first: 100) {
       nodes {
         id
+        number
         title
         url
         fields(first: 50) {
           nodes {
-            ... on ProjectV2FieldCommon { id name dataType }
+            ... on ProjectV2FieldCommon { id databaseId name dataType }
             ... on ProjectV2SingleSelectField { options { id name } }
+          }
+        }
+        views(first: 50) {
+          nodes {
+            id
+            name
+            layout
+            filter
+            groupByFields(first: 1) { totalCount }
+            sortByFields(first: 1) { totalCount }
           }
         }
       }

@@ -1,7 +1,7 @@
 """Make a GitHub Project show the sandbox's issues, with fields derived from the issues.
 
-The issues are the store: every field value is computed from an issue's labels, state and
-body, so a sync can be repeated at any time and rebuilds anything that drifted.
+The issues are the store: every field value is computed from an issue's labels, state, body,
+sub-issue order and blockers, so a sync can be repeated at any time and rebuilds anything that drifted.
 """
 
 # %% imports
@@ -9,73 +9,60 @@ from __future__ import annotations
 
 import argparse
 import os
-import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from github_client import GitHubClient
-from plans import PLAN_LABEL, SANDBOX_LABEL, STATUS_COLORS, TRACK_LABEL_PREFIX, ItemStatus
+from plan_board import IssueFields, PlanBoard
+from plans import (
+    NEXT_STEP_COLORS,
+    SANDBOX_LABEL,
+    STATUS_COLORS,
+    TRACK_LABEL_PREFIX,
+    ItemStatus,
+    NextStep,
+)
+from project_views import VIEWS_API_VERSION, ProjectViews
+from up_next_issue import UpNextIssue
 
 QUERIES = Path(__file__).parent / "queries"
 """Directory of the GraphQL documents."""
 
-BRANCH_LINE = re.compile(r"^- \*\*Branch:\*\* \[`([^`]+)`\]", re.MULTILINE)
-"""The branch line of an item issue's body."""
 
-PULL_REQUEST_LINE = re.compile(r"^- \*\*Pull request:\*\* (?:[\w.-]+/[\w.-]+)?#(\d+)", re.MULTILINE)
-"""The pull request line of an item issue's body."""
-
-STATUS_FIELD = "Plan status"
-"""Project field that shows an item's status."""
-
-TRACK_FIELD = "Track"
-"""Project field that shows an item's track."""
-
-BRANCH_FIELD = "Branch"
-"""Project field that shows an item's branch."""
-
-PULL_REQUEST_FIELD = "Pull request"
-"""Project field that shows an item's pull request number."""
-
-
-# %% desired state
+# %% fields
 @dataclass
-class IssueFields:
-    """The project field values one issue should show."""
+class FieldDefinition:
+    """One project field and how an issue's desired values fill it."""
 
-    node_id: str
-    """GraphQL id of the issue."""
-    number: int
-    """The issue's number."""
-    status: str | None
-    """Option name of the item's status."""
-    track: str | None
-    """Option name of the item's track."""
-    branch: str | None
-    """The item's branch."""
-    pull_request: int | None
-    """The item's pull request number."""
+    name: str
+    """The field's name in the project."""
+    data_type: str
+    """``SINGLE_SELECT``, ``TEXT`` or ``NUMBER``."""
+    attribute: str
+    """The :class:`IssueFields` attribute that holds the value."""
 
-    @classmethod
-    def of(cls, issue: dict[str, Any], track_names: dict[str, str]) -> IssueFields:
-        """The values ``issue`` should show; a plan issue shows none."""
-        labels = [label["name"] for label in issue["labels"]]
-        body = issue.get("body") or ""
-        if PLAN_LABEL in labels:
-            return cls(issue["node_id"], issue["number"], None, None, None, None)
-        status = ItemStatus.DONE if issue["state"] == "closed" else ItemStatus.from_labels(labels)
-        tracks = [track_names[label] for label in labels if label in track_names]
-        branch = BRANCH_LINE.search(body)
-        pull_request = PULL_REQUEST_LINE.search(body)
-        return cls(
-            node_id=issue["node_id"],
-            number=issue["number"],
-            status=status.title if status else None,
-            track=tracks[0] if len(tracks) == 1 else None,
-            branch=branch.group(1) if branch else None,
-            pull_request=int(pull_request.group(1)) if pull_request else None,
-        )
+    def value_of(self, desired: IssueFields) -> Any:
+        """The value ``desired`` gives this field, ``None`` for empty."""
+        value = getattr(desired, self.attribute)
+        if self.data_type == "NUMBER":
+            return None if value is None else float(value)
+        return value
+
+
+FIELDS = [
+    FieldDefinition("Plan", "SINGLE_SELECT", "plan"),
+    FieldDefinition("Order", "NUMBER", "order"),
+    FieldDefinition("Plan status", "SINGLE_SELECT", "status"),
+    FieldDefinition("Next", "SINGLE_SELECT", "next_step"),
+    FieldDefinition("Rank", "NUMBER", "rank"),
+    FieldDefinition("Unblocks", "NUMBER", "unblocks_shown"),
+    FieldDefinition("Command", "TEXT", "command"),
+    FieldDefinition("Track", "SINGLE_SELECT", "track"),
+    FieldDefinition("Branch", "TEXT", "branch"),
+    FieldDefinition("Pull request", "NUMBER", "pull_request"),
+]
+"""Every field the sync owns."""
 
 
 # %% project
@@ -85,28 +72,43 @@ class ProjectSync:
 
     project_client: GitHubClient
     """Client whose token may write the project."""
+    views_client: GitHubClient
+    """Client for the project views endpoint, with the same token."""
     repository_client: GitHubClient
-    """Client whose token may read the repository's issues."""
+    """Client whose token may read and write the repository's issues."""
     repository: str
     """``owner/name`` of the repository."""
     project_title: str
     """Title the project is found or created by."""
 
     def run(self) -> None:
-        """Create the project and its fields if missing, then set every item's values."""
+        """Create the project, fields and views if missing, set every item's values, then rewrite *Up next*."""
         issues = self.repository_client.paginate(f"/repos/{self.repository}/issues?labels={SANDBOX_LABEL}&state=all&per_page=100")
         labels = self.repository_client.paginate(f"/repos/{self.repository}/labels?per_page=100")
         track_names = {label["name"]: label.get("description") or label["name"].removeprefix(TRACK_LABEL_PREFIX) for label in labels if label["name"].startswith(TRACK_LABEL_PREFIX)}
-        project = self.ensure_project()
-        project = self.ensure_fields(project, sorted(set(track_names.values())))
-        fields = {field["name"]: field for field in project["fields"]["nodes"] if field}
+        board = PlanBoard(self.repository_client, self.repository)
+        board.read(issues, track_names)
+        viewer, project = self.ensure_project()
+        project = self.ensure_fields(project, self.options(board, track_names))
+        fields = {entry["name"]: entry for entry in project["fields"]["nodes"] if entry}
         current = self.current_values(project["id"])
         writes = 0
-        for issue in issues:
-            desired = IssueFields.of(issue, track_names)
+        for desired in board.fields_by_number.values():
             item_id, values = current.get(desired.node_id) or (self.add_item(project["id"], desired.node_id), {})
             writes += self.set_values(project["id"], item_id, fields, values, desired)
-        print(f"{len(issues)} issue(s) in {project['url']}; {writes} field value(s) written.")
+        views = ProjectViews(self.views_client, viewer["databaseId"]).ensure(project, self.query)
+        UpNextIssue(self.repository_client, self.repository).write(board, project["url"])
+        print(f"{len(issues)} issue(s) in {project['url']}; {writes} field value(s) written; {views} view(s) created; {len(board.recommended)} item(s) recommended.")
+
+    @staticmethod
+    def options(board: PlanBoard, track_names: dict[str, str]) -> dict[str, list[tuple[str, str]]]:
+        """Options and colours of each single-select field, in display order."""
+        return {
+            "Plan": [(name, "GRAY") for name in board.plan_names],
+            "Plan status": [(status.title, STATUS_COLORS[status]) for status in ItemStatus],
+            "Next": [(step.value, NEXT_STEP_COLORS[step]) for step in NextStep],
+            "Track": [(name, "BLUE") for name in sorted(set(track_names.values()))],
+        }
 
     def query(self, document: str, **variables: Any) -> Any:
         """Run one GraphQL document from :data:`QUERIES` with the project token."""
@@ -118,35 +120,28 @@ class ProjectSync:
         projects = [project for project in viewer["projectsV2"]["nodes"] if project["title"] == self.project_title]
         return viewer, projects[0] if projects else None
 
-    def ensure_project(self) -> dict[str, Any]:
-        """The project, created if needed."""
+    def ensure_project(self) -> tuple[dict[str, Any], dict[str, Any]]:
+        """The token's user and the project, created if needed."""
         viewer, project = self.find_project()
         if project is not None:
-            return project
+            return viewer, project
         self.query("create_project", owner=viewer["id"], title=self.project_title)
-        return self.find_project()[1]
+        return self.find_project()
 
-    def ensure_fields(self, project: dict[str, Any], track_names: list[str]) -> dict[str, Any]:
+    def ensure_fields(self, project: dict[str, Any], options: dict[str, list[tuple[str, str]]]) -> dict[str, Any]:
         """The project with every field, a single-select one recreated when its options differ."""
-        wanted_options = {
-            STATUS_FIELD: [(status.title, STATUS_COLORS[status]) for status in ItemStatus],
-            TRACK_FIELD: [(name, "BLUE") for name in track_names],
-        }
-        fields = {field["name"]: field for field in project["fields"]["nodes"] if field}
+        fields = {entry["name"]: entry for entry in project["fields"]["nodes"] if entry}
         changed = False
-        for name, options in wanted_options.items():
-            existing = fields.get(name)
-            if existing and [option["name"] for option in existing.get("options", [])] == [option for option, _ in options]:
+        for definition in FIELDS:
+            existing = fields.get(definition.name)
+            wanted = options.get(definition.name)
+            if existing and (wanted is None or [option["name"] for option in existing.get("options", [])] == [option for option, _ in wanted]):
                 continue
             if existing:
                 self.query("delete_field", field=existing["id"])
-            option_inputs = [{"name": option, "color": color, "description": ""} for option, color in options]
-            self.query("create_field", project=project["id"], name=name, dataType="SINGLE_SELECT", options=option_inputs)
+            option_inputs = [{"name": option, "color": color, "description": ""} for option, color in wanted] if wanted is not None else None
+            self.query("create_field", project=project["id"], name=definition.name, dataType=definition.data_type, options=option_inputs)
             changed = True
-        for name, data_type in [(BRANCH_FIELD, "TEXT"), (PULL_REQUEST_FIELD, "NUMBER")]:
-            if name not in fields:
-                self.query("create_field", project=project["id"], name=name, dataType=data_type, options=None)
-                changed = True
         return self.find_project()[1] if changed else project
 
     def current_values(self, project_id: str) -> dict[str, tuple[str, dict[str, Any]]]:
@@ -161,7 +156,7 @@ class ProjectSync:
                 field_values = {}
                 for value in item["fieldValues"]["nodes"]:
                     if value and value.get("field"):
-                        field_values[value["field"]["id"]] = value.get("optionId") or value.get("text") or value.get("number")
+                        field_values[value["field"]["id"]] = next(value[key] for key in ("optionId", "text", "number") if key in value)
                 values[item["content"]["id"]] = (item["id"], field_values)
             if not items["pageInfo"]["hasNextPage"]:
                 return values
@@ -173,22 +168,19 @@ class ProjectSync:
 
     def set_values(self, project_id: str, item_id: str, fields: dict[str, Any], current: dict[str, Any], desired: IssueFields) -> int:
         """Write the values of ``desired`` that differ from ``current``; return how many were written."""
-        wanted: list[tuple[dict[str, Any], Any, dict[str, Any] | None]] = []
-        for name, option in [(STATUS_FIELD, desired.status), (TRACK_FIELD, desired.track)]:
-            option_ids = {entry["name"]: entry["id"] for entry in fields[name]["options"]}
-            option_id = option_ids.get(option) if option else None
-            wanted.append((fields[name], option_id, {"singleSelectOptionId": option_id} if option_id else None))
-        wanted.append((fields[BRANCH_FIELD], desired.branch, {"text": desired.branch} if desired.branch else None))
-        number = float(desired.pull_request) if desired.pull_request else None
-        wanted.append((fields[PULL_REQUEST_FIELD], number, {"number": number} if number else None))
         writes = 0
-        for field, value, value_input in wanted:
-            if current.get(field["id"]) == value:
+        for definition in FIELDS:
+            project_field = fields[definition.name]
+            value = definition.value_of(desired)
+            if definition.data_type == "SINGLE_SELECT":
+                value = {option["name"]: option["id"] for option in project_field["options"]}.get(value)
+            if current.get(project_field["id"]) == value:
                 continue
-            if value_input is None:
-                self.query("clear_value", project=project_id, item=item_id, field=field["id"])
+            if value is None:
+                self.query("clear_value", project=project_id, item=item_id, field=project_field["id"])
             else:
-                self.query("set_value", project=project_id, item=item_id, field=field["id"], value=value_input)
+                key = {"SINGLE_SELECT": "singleSelectOptionId", "TEXT": "text", "NUMBER": "number"}[definition.data_type]
+                self.query("set_value", project=project_id, item=item_id, field=project_field["id"], value={key: value})
             writes += 1
         return writes
 
@@ -201,6 +193,7 @@ def main() -> None:
     arguments = parser.parse_args()
     ProjectSync(
         project_client=GitHubClient(os.environ["PROJECTS_TOKEN"], write_interval_seconds=0.0),
+        views_client=GitHubClient(os.environ["PROJECTS_TOKEN"], api_version=VIEWS_API_VERSION),
         repository_client=GitHubClient(os.environ["GITHUB_TOKEN"]),
         repository=os.environ["GITHUB_REPOSITORY"],
         project_title=arguments.project_title,

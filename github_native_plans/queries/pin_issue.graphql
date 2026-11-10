@@ -1,0 +1,3 @@
+mutation($issue: ID!) {
+  pinIssue(input: {issueId: $issue}) { issue { id } }
+}

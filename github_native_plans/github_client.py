@@ -45,6 +45,8 @@ class GitHubClient:
     """Token every request is sent with."""
     write_interval_seconds: float = 1.0
     """Pause after each write, to stay under GitHub's content-creation limit."""
+    api_version: str = "2022-11-28"
+    """REST API version every request asks for."""
 
     def request(self, method: str, path_or_url: str, payload: Any = None) -> tuple[Any, dict[str, str]]:
         """Send one REST request and return its parsed body and headers."""
@@ -88,7 +90,7 @@ class GitHubClient:
         return {
             "Authorization": f"Bearer {self.token}",
             "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
+            "X-GitHub-Api-Version": self.api_version,
             "Content-Type": "application/json",
             "User-Agent": "github-native-plans-sandbox",
         }

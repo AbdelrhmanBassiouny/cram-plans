@@ -1,0 +1,3 @@
+mutation($view: ID!) {
+  deleteProjectV2View(input: {viewId: $view}) { clientMutationId }
+}
