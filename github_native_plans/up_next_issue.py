@@ -21,6 +21,9 @@ UP_NEXT_TITLE = "Up next"
 TEMPLATE = Path(__file__).parent / "templates" / "up_next.md"
 """Body template of the recommendation issue."""
 
+WORKFLOW_FILE = "github-native-plans.yml"
+"""The workflow that runs the sync, which *Refresh now* opens."""
+
 
 # %% the issue
 @dataclass
@@ -37,6 +40,8 @@ class UpNextIssue:
         steps = [entry.next_step for entry in board.fields_by_number.values()]
         body = Template(TEMPLATE.read_text()).substitute(
             project_url=project_url,
+            refresh_url=f"https://github.com/{self.repository}/actions/workflows/{WORKFLOW_FILE}",
+            in_review=steps.count(NextStep.IN_REVIEW),
             waiting=steps.count(NextStep.WAITING),
             done=steps.count(NextStep.DONE),
             items="\n\n".join(self.entry(item) for item in board.recommended) or "Nothing to do now.",
@@ -47,9 +52,10 @@ class UpNextIssue:
 
     @staticmethod
     def entry(item: IssueFields) -> str:
-        """One recommended item: its rank, link, step, plan and command."""
+        """One recommended item: its rank, step, issue, why, plan, session link and command."""
+        why = f" — {item.reason}" if item.reason else ""
         unblocks = f" · unblocks {item.unblocks}" if item.unblocks else ""
-        return f"**{item.rank}. {item.next_step}** #{item.number}\n{item.plan}{unblocks}\n```text\n{item.command}\n```"
+        return f"**{item.rank}. {item.next_step}** #{item.number}{why}\n{item.plan}{unblocks} · [▶ Open in Claude]({item.session_link})\n```text\n{item.command}\n```"
 
     def find(self) -> dict[str, Any] | None:
         """The open recommendation issue, if there is one."""

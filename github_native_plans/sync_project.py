@@ -13,7 +13,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from claude_session import ClaudeSessionLink
 from github_client import GitHubClient
+from item_next_step import ItemNextStep
 from plan_board import IssueFields, PlanBoard
 from plans import (
     NEXT_STEP_COLORS,
@@ -55,9 +57,11 @@ FIELDS = [
     FieldDefinition("Order", "NUMBER", "order"),
     FieldDefinition("Plan status", "SINGLE_SELECT", "status"),
     FieldDefinition("Next", "SINGLE_SELECT", "next_step"),
+    FieldDefinition("Why", "TEXT", "reason"),
     FieldDefinition("Rank", "NUMBER", "rank"),
     FieldDefinition("Unblocks", "NUMBER", "unblocks_shown"),
     FieldDefinition("Command", "TEXT", "command"),
+    FieldDefinition("Session", "TEXT", "session_link"),
     FieldDefinition("Track", "SINGLE_SELECT", "track"),
     FieldDefinition("Branch", "TEXT", "branch"),
     FieldDefinition("Pull request", "NUMBER", "pull_request"),
@@ -78,15 +82,21 @@ class ProjectSync:
     """Client whose token may read and write the repository's issues."""
     repository: str
     """``owner/name`` of the repository."""
+    code_repository: str
+    """``owner/name`` of the repository the items' pull requests are in, which sessions open with."""
     project_title: str
     """Title the project is found or created by."""
+    session_environment: str | None = None
+    """Cloud environment a session link starts in; ``None`` for the one last used."""
+    recreate_views: bool = False
+    """Delete and recreate the views this sync owns, discarding edits made to them."""
 
     def run(self) -> None:
-        """Create the project, fields and views if missing, set every item's values, then rewrite *Up next*."""
+        """Create the project, fields and views if missing, set every item's values, then rewrite the next steps and *Up next*."""
         issues = self.repository_client.paginate(f"/repos/{self.repository}/issues?labels={SANDBOX_LABEL}&state=all&per_page=100")
         labels = self.repository_client.paginate(f"/repos/{self.repository}/labels?per_page=100")
         track_names = {label["name"]: label.get("description") or label["name"].removeprefix(TRACK_LABEL_PREFIX) for label in labels if label["name"].startswith(TRACK_LABEL_PREFIX)}
-        board = PlanBoard(self.repository_client, self.repository)
+        board = PlanBoard(self.repository_client, self.repository, self.code_repository, ClaudeSessionLink(self.code_repository, self.session_environment))
         board.read(issues, track_names)
         viewer, project = self.ensure_project()
         project = self.ensure_fields(project, self.options(board, track_names))
@@ -96,9 +106,11 @@ class ProjectSync:
         for desired in board.fields_by_number.values():
             item_id, values = current.get(desired.node_id) or (self.add_item(project["id"], desired.node_id), {})
             writes += self.set_values(project["id"], item_id, fields, values, desired)
+        next_steps = ItemNextStep(self.repository_client, self.repository)
+        rewritten = sum(next_steps.write(entry) for entry in board.fields_by_number.values() if entry.next_step)
         UpNextIssue(self.repository_client, self.repository).write(board, project["url"])
-        views = ProjectViews(self.views_client, viewer["login"]).ensure(project, self.query)
-        print(f"{len(issues)} issue(s) in {project['url']}; {writes} field value(s) written; {views} view(s) created; {len(board.recommended)} item(s) recommended.")
+        views = ProjectViews(self.views_client, viewer["login"]).ensure(project, self.query, self.recreate_views)
+        print(f"{len(issues)} issue(s) in {project['url']}; {writes} field value(s) written; {rewritten} next step(s) rewritten; {views} view(s) created; {len(board.recommended)} item(s) recommended.")
 
     @staticmethod
     def options(board: PlanBoard, track_names: dict[str, str]) -> dict[str, list[tuple[str, str]]]:
@@ -190,13 +202,19 @@ def main() -> None:
     """Sync the project named on the command line."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project-title", required=True)
+    parser.add_argument("--code-repository", required=True)
+    parser.add_argument("--session-environment")
+    parser.add_argument("--recreate-views", action="store_true")
     arguments = parser.parse_args()
     ProjectSync(
         project_client=GitHubClient(os.environ["PROJECTS_TOKEN"], write_interval_seconds=0.0),
         views_client=GitHubClient(os.environ["PROJECTS_TOKEN"], api_version=VIEWS_API_VERSION),
         repository_client=GitHubClient(os.environ["GITHUB_TOKEN"]),
         repository=os.environ["GITHUB_REPOSITORY"],
+        code_repository=arguments.code_repository,
         project_title=arguments.project_title,
+        session_environment=arguments.session_environment,
+        recreate_views=arguments.recreate_views,
     ).run()
 
 

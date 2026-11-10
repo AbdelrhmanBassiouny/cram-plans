@@ -56,21 +56,21 @@ VIEWS = [
     ViewDefinition(
         name="Up next",
         layout="table",
-        visible_fields=["Title", "Rank", "Next", "Command", "Plan", "Unblocks"],
+        visible_fields=["Title", "Rank", "Next", "Why", "Session", "Command", "Plan", "Unblocks"],
         sort_by=["Rank"],
         filter="rank:>0",
     ),
     ViewDefinition(
         name="Plans",
         layout="table",
-        visible_fields=["Title", "Plan status", "Next", "Command", "Track", "Pull request"],
+        visible_fields=["Title", "Plan status", "Next", "Why", "Session", "Track", "Pull request"],
         sort_by=["Order"],
         group_by="Plan",
     ),
     ViewDefinition(
         name="Board",
         layout="board",
-        visible_fields=["Title", "Next", "Plan", "Pull request"],
+        visible_fields=["Title", "Next", "Why", "Plan", "Pull request"],
         sort_by=["Order"],
         group_by="Plan",
         columns_by="Plan status",
@@ -83,16 +83,23 @@ VIEWS = [
 # %% creating them
 @dataclass
 class ProjectViews:
-    """Creates the missing views of one user-owned project; a view that exists is never changed."""
+    """Creates the missing views of one user-owned project; a view that exists is changed only on request."""
 
     client: GitHubClient
     """Client whose token may write the project, on :data:`VIEWS_API_VERSION`."""
     owner_login: str
     """Login of the project's owner."""
 
-    def ensure(self, project: dict[str, Any], query: Any) -> int:
-        """Create the missing views, then drop GitHub's untouched first view; return how many were created."""
+    def ensure(self, project: dict[str, Any], query: Any, recreate: bool) -> int:
+        """Create the missing views, then drop GitHub's untouched first view; return how many were created.
+
+        With ``recreate``, the views of :data:`VIEWS` that exist are deleted first, so they are created anew.
+        """
         existing = {view["name"]: view for view in project["views"]["nodes"]}
+        owned = {view.name for view in VIEWS}
+        if recreate:
+            for name in owned & existing.keys():
+                query("delete_view", view=existing.pop(name)["id"])
         field_ids = {entry["name"]: entry["databaseId"] for entry in project["fields"]["nodes"] if entry}
         missing = [view for view in VIEWS if view.name not in existing]
         for view in missing:

@@ -46,16 +46,32 @@ The workflow `.github/workflows/github-native-plans.yml` has two steps:
 
 ### The recommendation
 
-Every open item gets a *Next* step, worded like the plan site's buttons: *Resume*
-(in progress), *Resolve* (blocked), *Reconsider* (deferred), *Start now* (not started and
-nothing it waits for is open) or *Waiting*. Items to resume, resolve or start are ranked:
-started work first, then blocked work, then items to start; within each, the item that
-unblocks the most open items first, then plan order. *Command* holds the basstler command
-for that step.
+Every open item gets a *Next* step, worded like the plan site's buttons, and a *Why*. An
+item's pull request in the code repository is read live on every sync:
+
+| Next | When |
+|---|---|
+| *Resolve* | Something waits on you: a reviewer asked for changes, review threads are open, CI fails, or the item is labelled blocked |
+| *Resume* | In progress with a draft pull request, or none yet |
+| *Start now* | Not started and nothing it waits for is open |
+| *In review* | Its pull request is ready and nothing waits on you; not recommended |
+| *Waiting* | Not started and waits for an open item; not recommended |
+| *Reconsider* | Deferred, or its pull request was closed unmerged |
+| *Done* | Closed, `status:done`, or its pull request merged |
+
+*Resolve*, *Resume* and *Start now* items are ranked in that order; within each, the item
+that unblocks the most open items first, then plan order. *Command* holds the basstler
+command for the step, and *Session* a link that opens a Claude Code session on the code
+repository with that command typed in. Each item issue carries the same step, reason and
+link at its top. Set the repository variable `CLAUDE_ENVIRONMENT` to an environment's name
+to open the sessions there.
 
 A push to `main` runs both. Every change to a sandbox issue (opened, edited, labelled,
 closed, reopened) runs the sync, so the project follows the issues within a minute or
-so. *sync-only* and *import-and-sync* can also be started from the Actions tab.
+so. Reordering sub-issues, changing *blocked by*, and reviews, CI and merges in the code
+repository start no run; the next run picks them up, or press *Refresh now* in *Up next*.
+*sync-only* and *import-and-sync* can also be started from the Actions tab, where
+*recreate_views* rebuilds the three views.
 
 ## Working with it
 

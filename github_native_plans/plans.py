@@ -79,6 +79,7 @@ class NextStep(StrEnum):
     RESUME = "Resume"
     RESOLVE = "Resolve"
     START_NOW = "Start now"
+    IN_REVIEW = "In review"
     RECONSIDER = "Reconsider"
     WAITING = "Waiting"
     DONE = "Done"
@@ -100,15 +101,15 @@ class NextStep(StrEnum):
 
     @property
     def recommendation_priority(self) -> int | None:
-        """Lower is recommended first: finish started work, then unblock, then start; ``None`` is never recommended."""
-        return {NextStep.RESUME: 1, NextStep.RESOLVE: 2, NextStep.START_NOW: 3}.get(self)
+        """Lower is recommended first: answer what others wait on, then finish started work, then start; ``None`` is never recommended."""
+        return {NextStep.RESOLVE: 1, NextStep.RESUME: 2, NextStep.START_NOW: 3}.get(self)
 
     @property
     def skill(self) -> str | None:
         """The basstler skill that takes this step."""
         if self is NextStep.START_NOW:
             return "/plan-item-kickoff"
-        if self in (NextStep.RESUME, NextStep.RESOLVE, NextStep.RECONSIDER):
+        if self in (NextStep.RESUME, NextStep.RESOLVE, NextStep.IN_REVIEW, NextStep.RECONSIDER):
             return "/plan-item-resolve"
         return None
 
@@ -117,6 +118,7 @@ NEXT_STEP_COLORS = {
     NextStep.RESUME: "YELLOW",
     NextStep.RESOLVE: "RED",
     NextStep.START_NOW: "GREEN",
+    NextStep.IN_REVIEW: "ORANGE",
     NextStep.RECONSIDER: "PURPLE",
     NextStep.WAITING: "GRAY",
     NextStep.DONE: "BLUE",

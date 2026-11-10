@@ -21,6 +21,10 @@ on:
         description: Rewrite existing issues from plan.yaml (overwrites edits made on the issues)
         type: boolean
         default: false
+      recreate_views:
+        description: Delete and recreate the Up next, Plans and Board views (discards edits made to them)
+        type: boolean
+        default: false
 
 concurrency:
   group: github-native-plans
@@ -61,9 +65,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PROJECTS_TOKEN: ${{ secrets.PROJECTS_TOKEN }}
+          RECREATE_VIEWS: ${{ inputs.recreate_views && '--recreate-views' || '' }}
+          SESSION_ENVIRONMENT: ${{ vars.CLAUDE_ENVIRONMENT }}
         run: |
           if [ -z "$PROJECTS_TOKEN" ]; then
             echo "::error::Add the repository secret PROJECTS_TOKEN (a classic token with only the project scope) to sync the project."
             exit 1
           fi
-          python github_native_plans/sync_project.py --project-title "$PROJECT_TITLE"
+          python github_native_plans/sync_project.py --project-title "$PROJECT_TITLE" --code-repository "$CODE_REPOSITORY" \
+            ${SESSION_ENVIRONMENT:+--session-environment "$SESSION_ENVIRONMENT"} $RECREATE_VIEWS
