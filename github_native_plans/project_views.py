@@ -66,7 +66,7 @@ VIEWS = [
         visible_fields=["Next", "Session", "CI", "Pull request", "Title", "Plan status"],
         sort_by=["Order"],
         group_by="Track",
-        filter="-label:plan -plan-status:Done",
+        filter="-label:plan -label:up-next -plan-status:Done",
     ),
     ViewDefinition(
         name="Plan board",

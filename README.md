@@ -54,7 +54,7 @@ The workflow `.github/workflows/github-native-plans.yml` has two steps:
   open the issue, whose top line has *▶ Open in Claude* and the pull request link.
 
 Both views hide done items, like the plan page; remove `-plan-status:Done` from a view's
-filter to show them. Both views start with a *▶ Up next* group holding the *Up next* issue, so the
+filter to show them. *Plan board* starts with a *▶ Up next* column holding the *Up next* issue, so the
 recommendation is one click away. Slicing by a plan hides it, since it belongs to none.
 
 To see one plan, open *View options* → *Slice by* → *Plan* once in each view and save it,
