@@ -50,6 +50,9 @@ The workflow `.github/workflows/github-native-plans.yml` has two steps:
   on a card filters by it, so the links are left off the cards: click the card's title to
   open the issue, whose top line has *▶ Open in Claude* and the pull request link.
 
+Both views start with a *▶ Up next* group holding the *Up next* issue, so the
+recommendation is one click away. Slicing by a plan hides it, since it belongs to none.
+
 To see one plan, open *View options* → *Slice by* → *Plan* once in each view and save it,
 then pick the plan in the side list (or type `plan:"…"` into the filter).
 

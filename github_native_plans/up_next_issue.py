@@ -18,6 +18,9 @@ UP_NEXT_LABEL = "up-next"
 UP_NEXT_TITLE = "Up next"
 """Title of the recommendation issue."""
 
+UP_NEXT_SECTION = "▶ Up next"
+"""The track option the recommendation issue is shown under, first in every view."""
+
 TEMPLATE = Path(__file__).parent / "templates" / "up_next.md"
 """Body template of the recommendation issue."""
 
@@ -35,8 +38,12 @@ class UpNextIssue:
     repository: str
     """``owner/name`` of the repository."""
 
-    def write(self, board: PlanBoard, project_url: str) -> None:
-        """Rewrite the issue from ``board`` if its body changed."""
+    def ensure(self) -> dict[str, Any]:
+        """The open recommendation issue, created and pinned if there is none."""
+        return self.find() or self.create()
+
+    def write(self, issue: dict[str, Any], board: PlanBoard, project_url: str) -> None:
+        """Rewrite ``issue`` from ``board`` if its body changed."""
         steps = [entry.next_step for entry in board.fields_by_number.values()]
         body = Template(TEMPLATE.read_text()).substitute(
             project_url=project_url,
@@ -46,7 +53,6 @@ class UpNextIssue:
             done=steps.count(NextStep.DONE),
             items="\n\n".join(self.entry(item) for item in board.recommended) or "Nothing to do now.",
         )
-        issue = self.find() or self.create()
         if (issue.get("body") or "").strip() != body.strip():
             self.client.rest("PATCH", f"/repos/{self.repository}/issues/{issue['number']}", {"body": body})
 
