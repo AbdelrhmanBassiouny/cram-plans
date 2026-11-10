@@ -56,7 +56,7 @@ VIEWS = [
     ViewDefinition(
         name="Plan",
         layout="table",
-        visible_fields=["Next", "Session", "CI", "Pull request", "Title", "Why", "Plan", "Plan status"],
+        visible_fields=["Next", "Session", "CI", "Pull request", "Title", "Plan status"],
         sort_by=["Order"],
         group_by="Track",
         filter="-label:plan",

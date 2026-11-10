@@ -42,7 +42,7 @@ The workflow `.github/workflows/github-native-plans.yml` has two steps:
 
 - **Plan**, a table laid out like a plan page: grouped by *wave · track* in plan page
   order, items in stack order. Columns: *Next*, *Session*, *CI*, *Pull request* (the pull
-  request's address), the title, *Why*, *Plan* and *Plan status*.
+  request's address), the title and *Plan status*.
 - **Plan board**, the plan page as cards: one column per *wave · track*, each column's
   cards stacked in item order. A card shows what a plan page card does, in the same order:
   status, pull request, CI, *Why*, then *Next* and *Session* in place of the action button.
