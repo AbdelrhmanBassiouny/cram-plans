@@ -38,13 +38,17 @@ The workflow `.github/workflows/github-native-plans.yml` has two steps:
    exists is never changed, so your own edits to a view stay; delete a view to get it back.
    It then rewrites the pinned *Up next* issue.
 
-### The view
+### The views
 
-The project has one view, *Plan*, a board laid out like a plan page: one column per
-*wave · track* in plan page order, each column's cards stacked in item order. Each card
-shows *Next*, *Session*, *CI*, *Pull request* (the pull request's address), *Why* and
-*Plan status*. To see one plan, open *View options* → *Slice by* → *Plan* once and save
-the view, then pick the plan in the side list (or type `plan:"…"` into the filter).
+- **Plan**, a table laid out like a plan page: grouped by *wave · track* in plan page
+  order, items in stack order. Columns: *Next*, *Session*, *CI*, *Pull request* (the pull
+  request's address), the title, *Why*, *Plan* and *Plan status*.
+- **Plan board**, the plan page as cards: one column per *wave · track*, each column's
+  cards stacked in item order. A card shows what a plan page card does, in the same order:
+  status, pull request, CI, *Why*, then *Next* and *Session* in place of the action button.
+
+To see one plan, open *View options* → *Slice by* → *Plan* once in each view and save it,
+then pick the plan in the side list (or type `plan:"…"` into the filter).
 
 Project fields can't show a named link: a text field holds plain text, so *Session* and
 *Pull request* show the raw address. The named links (*▶ Open in Claude*, *Pull request #n*) are on the line at
@@ -77,7 +81,7 @@ closed, reopened) runs the sync, so the project follows the issues within a minu
 so. Reordering sub-issues, changing *blocked by*, and reviews, CI and merges in the code
 repository start no run; the next run picks them up, or press *Refresh now* in *Up next*.
 *sync-only* and *import-and-sync* can also be started from the Actions tab, where
-*recreate_views* deletes every view and creates the *Plan* view again.
+*recreate_views* deletes every view and creates *Plan* and *Plan board* again.
 
 ## Working with it
 

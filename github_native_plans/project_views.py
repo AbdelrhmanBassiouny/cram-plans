@@ -55,8 +55,16 @@ class ViewDefinition:
 VIEWS = [
     ViewDefinition(
         name="Plan",
+        layout="table",
+        visible_fields=["Next", "Session", "CI", "Pull request", "Title", "Why", "Plan", "Plan status"],
+        sort_by=["Order"],
+        group_by="Track",
+        filter="-label:plan",
+    ),
+    ViewDefinition(
+        name="Plan board",
         layout="board",
-        visible_fields=["Next", "Session", "CI", "Pull request", "Why", "Plan status"],
+        visible_fields=["Plan status", "Pull request", "CI", "Why", "Next", "Session"],
         sort_by=["Order"],
         columns_by="Track",
         filter="-label:plan",
