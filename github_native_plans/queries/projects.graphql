@@ -1,0 +1,19 @@
+query {
+  viewer {
+    id
+    login
+    projectsV2(first: 100) {
+      nodes {
+        id
+        title
+        url
+        fields(first: 50) {
+          nodes {
+            ... on ProjectV2FieldCommon { id name dataType }
+            ... on ProjectV2SingleSelectField { options { id name } }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,5 @@
+mutation($project: ID!, $name: String!, $dataType: ProjectV2CustomFieldType!, $options: [ProjectV2SingleSelectFieldOptionInput!]) {
+  createProjectV2Field(input: {projectId: $project, name: $name, dataType: $dataType, singleSelectOptions: $options}) {
+    projectV2Field { ... on ProjectV2FieldCommon { id } }
+  }
+}

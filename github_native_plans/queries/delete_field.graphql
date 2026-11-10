@@ -1,0 +1,3 @@
+mutation($field: ID!) {
+  deleteProjectV2Field(input: {fieldId: $field}) { projectV2Field { ... on ProjectV2FieldCommon { id } } }
+}
