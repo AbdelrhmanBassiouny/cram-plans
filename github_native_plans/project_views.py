@@ -87,8 +87,8 @@ class ProjectViews:
 
     client: GitHubClient
     """Client whose token may write the project, on :data:`VIEWS_API_VERSION`."""
-    user_id: int
-    """REST id of the project's owner."""
+    owner_login: str
+    """Login of the project's owner."""
 
     def ensure(self, project: dict[str, Any], query: Any) -> int:
         """Create the missing views, then drop GitHub's untouched first view; return how many were created."""
@@ -96,7 +96,7 @@ class ProjectViews:
         field_ids = {entry["name"]: entry["databaseId"] for entry in project["fields"]["nodes"] if entry}
         missing = [view for view in VIEWS if view.name not in existing]
         for view in missing:
-            self.client.rest("POST", f"/users/{self.user_id}/projectsV2/{project['number']}/views", view.payload(field_ids))
+            self.client.rest("POST", f"/users/{self.owner_login}/projectsV2/{project['number']}/views", view.payload(field_ids))
         default = existing.get(DEFAULT_VIEW_NAME)
         if missing and default and self.is_untouched(default):
             query("delete_view", view=default["id"])

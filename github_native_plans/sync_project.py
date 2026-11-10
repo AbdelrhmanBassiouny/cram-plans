@@ -96,8 +96,8 @@ class ProjectSync:
         for desired in board.fields_by_number.values():
             item_id, values = current.get(desired.node_id) or (self.add_item(project["id"], desired.node_id), {})
             writes += self.set_values(project["id"], item_id, fields, values, desired)
-        views = ProjectViews(self.views_client, viewer["databaseId"]).ensure(project, self.query)
         UpNextIssue(self.repository_client, self.repository).write(board, project["url"])
+        views = ProjectViews(self.views_client, viewer["login"]).ensure(project, self.query)
         print(f"{len(issues)} issue(s) in {project['url']}; {writes} field value(s) written; {views} view(s) created; {len(board.recommended)} item(s) recommended.")
 
     @staticmethod
