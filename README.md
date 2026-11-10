@@ -40,6 +40,8 @@ The workflow `.github/workflows/github-native-plans.yml` has two steps:
 
 ### The views
 
+- **Up next**, the first tab: the recommended items, best first, with the *Plan* table's
+  columns.
 - **Plan**, a table laid out like a plan page: grouped by *wave · track* in plan page
   order, items in stack order. Columns: *Next*, *Session*, *CI*, *Pull request* (the pull
   request's address) and *Plan status*, after the title. GitHub shows a view's fields in
@@ -88,7 +90,7 @@ closed, reopened) runs the sync, so the project follows the issues within a minu
 so. Reordering sub-issues, changing *blocked by*, and reviews, CI and merges in the code
 repository start no run; the next run picks them up, or press *Refresh now* in *Up next*.
 *sync-only* and *import-and-sync* can also be started from the Actions tab, where
-*recreate_views* deletes every view and creates *Plan* and *Plan board* again.
+*recreate_views* deletes every view and creates *Up next*, *Plan* and *Plan board* again.
 
 ## Working with it
 

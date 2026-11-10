@@ -22,7 +22,7 @@ on:
         type: boolean
         default: false
       recreate_views:
-        description: Delete every view and recreate the Plan and Plan board views (discards edits made to views)
+        description: Delete every view and recreate the Up next, Plan and Plan board views (discards edits made to views)
         type: boolean
         default: false
 

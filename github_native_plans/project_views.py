@@ -54,6 +54,13 @@ class ViewDefinition:
 
 VIEWS = [
     ViewDefinition(
+        name="Up next",
+        layout="table",
+        visible_fields=["Next", "Session", "CI", "Pull request", "Title", "Plan status"],
+        sort_by=["Rank"],
+        filter="rank:>0",
+    ),
+    ViewDefinition(
         name="Plan",
         layout="table",
         visible_fields=["Next", "Session", "CI", "Pull request", "Title", "Plan status"],
