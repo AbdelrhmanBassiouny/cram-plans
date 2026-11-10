@@ -25,4 +25,4 @@ class ClaudeSessionLink:
         parameters = {"prompt": prompt, "repositories": self.repository}
         if self.environment:
             parameters["environment"] = self.environment
-        return f"{SESSION_START_URL}?{urlencode(parameters, quote_via=quote)}"
+        return f"{SESSION_START_URL}?{urlencode(parameters, safe='/', quote_via=quote)}"
