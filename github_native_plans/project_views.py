@@ -59,7 +59,7 @@ VIEWS = [
         visible_fields=["Next", "Session", "CI", "Pull request", "Title", "Plan status"],
         sort_by=["Order"],
         group_by="Track",
-        filter="-label:plan",
+        filter="-label:plan -plan-status:Done",
     ),
     ViewDefinition(
         name="Plan board",
@@ -67,7 +67,7 @@ VIEWS = [
         visible_fields=["Plan status", "CI", "Why", "Next"],
         sort_by=["Order"],
         columns_by="Track",
-        filter="-label:plan",
+        filter="-label:plan -plan-status:Done",
     ),
 ]
 """The views every project gets, in tab order."""
