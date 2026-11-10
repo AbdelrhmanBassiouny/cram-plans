@@ -41,7 +41,7 @@ so. *sync-only* and *import-and-sync* can also be started from the Actions tab.
 
 ## Working with it
 
-- Change an item's status: swap its `status:*` label (or close it), then sync.
+- Change an item's status: swap its `status:*` label, or close it; the project follows.
 - Add an item: use the *Add work to this plan* prompt in the plan issue.
 - Turn an experimental branch into items: use the *Split an experimental branch* prompt.
 - Continue an item: copy the *Continue this item* prompt from its issue into a session.
