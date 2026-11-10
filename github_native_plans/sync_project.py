@@ -27,7 +27,7 @@ from plans import (
 )
 from project_views import VIEWS_API_VERSION, ProjectViews
 from pull_requests import CHECK_COLORS
-from up_next_issue import UP_NEXT_SECTION, UpNextIssue
+from up_next_issue import UpNextIssue
 
 QUERIES = Path(__file__).parent / "queries"
 """Directory of the GraphQL documents."""
@@ -94,26 +94,24 @@ class ProjectSync:
     """Delete and recreate the views this sync owns, discarding edits made to them."""
 
     def run(self) -> None:
-        """Create the project, fields and views if missing, set the values of every item and of *Up next*, then rewrite the next steps and *Up next*."""
+        """Create the project, fields and views if missing, set every item's values, then rewrite the next steps and *Up next*."""
         issues = self.repository_client.paginate(f"/repos/{self.repository}/issues?labels={SANDBOX_LABEL}&state=all&per_page=100")
         labels = self.repository_client.paginate(f"/repos/{self.repository}/labels?per_page=100")
         track_names = {label["name"]: label.get("description") or label["name"].removeprefix(TRACK_LABEL_PREFIX) for label in labels if label["name"].startswith(TRACK_LABEL_PREFIX)}
         board = PlanBoard(self.repository_client, self.repository, self.code_repository, ClaudeSessionLink(self.code_repository, self.session_environment))
         board.read(issues, track_names)
-        up_next = UpNextIssue(self.repository_client, self.repository)
-        up_next_issue = up_next.ensure()
         viewer, project = self.ensure_project()
         project, fields_created = self.ensure_fields(project, self.options(board))
         fields = {entry["name"]: entry for entry in project["fields"]["nodes"] if entry}
         current = self.current_values(project["id"])
         writes = 0
-        up_next_row = IssueFields(up_next_issue["node_id"], up_next_issue["number"], up_next_issue["title"], up_next_issue.get("body") or "", None, 0, track=UP_NEXT_SECTION)
-        for desired in [up_next_row, *board.fields_by_number.values()]:
+        for desired in board.fields_by_number.values():
             item_id, values = current.get(desired.node_id) or (self.add_item(project["id"], desired.node_id), {})
             writes += self.set_values(project["id"], item_id, fields, values, desired)
         next_steps = ItemNextStep(self.repository_client, self.repository)
         rewritten = sum(next_steps.write(entry) for entry in board.fields_by_number.values() if entry.next_step)
-        up_next.write(up_next_issue, board, project["url"])
+        up_next = UpNextIssue(self.repository_client, self.repository)
+        up_next.write(up_next.ensure(), board, project["url"])
         views = ProjectViews(self.views_client, viewer["login"]).ensure(project, self.query, self.recreate_views or fields_created)
         print(f"{len(issues)} issue(s) in {project['url']}; {writes} field value(s) written; {rewritten} next step(s) rewritten; {views} view(s) created; {len(board.recommended)} item(s) recommended.")
 
@@ -124,7 +122,7 @@ class ProjectSync:
             "Plan": [(name, "GRAY") for name in board.plan_names],
             "Plan status": [(status.title, STATUS_COLORS[status]) for status in ItemStatus],
             "Next": [(step.value, NEXT_STEP_COLORS[step]) for step in NextStep],
-            "Track": [(UP_NEXT_SECTION, "GREEN"), *((name, "BLUE") for name in board.tracks)],
+            "Track": [(name, "BLUE") for name in board.tracks],
             "CI": list(CHECK_COLORS.items()),
         }
 

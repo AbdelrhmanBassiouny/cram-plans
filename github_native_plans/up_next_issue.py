@@ -18,9 +18,6 @@ UP_NEXT_LABEL = "up-next"
 UP_NEXT_TITLE = "Up next"
 """Title of the recommendation issue."""
 
-UP_NEXT_SECTION = "▶ Up next"
-"""The track option the recommendation issue is shown under, first in every view."""
-
 TEMPLATE = Path(__file__).parent / "templates" / "up_next.md"
 """Body template of the recommendation issue."""
 

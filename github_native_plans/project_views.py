@@ -74,7 +74,7 @@ VIEWS = [
         visible_fields=["Plan status", "CI", "Why", "Next"],
         sort_by=["Order"],
         columns_by="Track",
-        filter="-label:plan -plan-status:Done",
+        filter="-label:plan -label:up-next -plan-status:Done",
     ),
 ]
 """The views every project gets, in tab order."""
