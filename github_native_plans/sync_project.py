@@ -54,21 +54,21 @@ class FieldDefinition:
 
 
 FIELDS = [
+    FieldDefinition("Branch", "TEXT", "branch"),
     FieldDefinition("Plan", "SINGLE_SELECT", "plan"),
     FieldDefinition("Order", "NUMBER", "order"),
-    FieldDefinition("Plan status", "SINGLE_SELECT", "status"),
-    FieldDefinition("Next", "SINGLE_SELECT", "next_step"),
-    FieldDefinition("Why", "TEXT", "reason"),
     FieldDefinition("Rank", "NUMBER", "rank"),
     FieldDefinition("Unblocks", "NUMBER", "unblocks_shown"),
     FieldDefinition("Command", "TEXT", "command"),
+    FieldDefinition("Next", "SINGLE_SELECT", "next_step"),
+    FieldDefinition("Why", "TEXT", "reason"),
     FieldDefinition("Session", "TEXT", "session_link"),
     FieldDefinition("Track", "SINGLE_SELECT", "track"),
-    FieldDefinition("Branch", "TEXT", "branch"),
-    FieldDefinition("Pull request", "TEXT", "pull_request_url"),
     FieldDefinition("CI", "SINGLE_SELECT", "checks"),
+    FieldDefinition("Pull request", "TEXT", "pull_request_url"),
+    FieldDefinition("Plan status", "SINGLE_SELECT", "status"),
 ]
-"""Every field the sync owns."""
+"""Every field the sync owns, in creation order, which is the order a view shows them in after the title."""
 
 
 # %% project
@@ -101,7 +101,7 @@ class ProjectSync:
         board = PlanBoard(self.repository_client, self.repository, self.code_repository, ClaudeSessionLink(self.code_repository, self.session_environment))
         board.read(issues, track_names)
         viewer, project = self.ensure_project()
-        project = self.ensure_fields(project, self.options(board))
+        project, fields_created = self.ensure_fields(project, self.options(board))
         fields = {entry["name"]: entry for entry in project["fields"]["nodes"] if entry}
         current = self.current_values(project["id"])
         writes = 0
@@ -111,7 +111,7 @@ class ProjectSync:
         next_steps = ItemNextStep(self.repository_client, self.repository)
         rewritten = sum(next_steps.write(entry) for entry in board.fields_by_number.values() if entry.next_step)
         UpNextIssue(self.repository_client, self.repository).write(board, project["url"])
-        views = ProjectViews(self.views_client, viewer["login"]).ensure(project, self.query, self.recreate_views)
+        views = ProjectViews(self.views_client, viewer["login"]).ensure(project, self.query, self.recreate_views or fields_created)
         print(f"{len(issues)} issue(s) in {project['url']}; {writes} field value(s) written; {rewritten} next step(s) rewritten; {views} view(s) created; {len(board.recommended)} item(s) recommended.")
 
     @staticmethod
@@ -143,22 +143,29 @@ class ProjectSync:
         self.query("create_project", owner=viewer["id"], title=self.project_title)
         return self.find_project()
 
-    def ensure_fields(self, project: dict[str, Any], options: dict[str, list[tuple[str, str]]]) -> dict[str, Any]:
-        """The project with every field, one recreated when its type or, for a single-select one, its options differ."""
+    def ensure_fields(self, project: dict[str, Any], options: dict[str, list[tuple[str, str]]]) -> tuple[dict[str, Any], bool]:
+        """The project with every field, and whether any was created.
+
+        A field is recreated when its type or, for a single-select one, its options differ, or when it is
+        older than a field before it in :data:`FIELDS`.
+        """
         fields = {entry["name"]: entry for entry in project["fields"]["nodes"] if entry}
         changed = False
+        newest = 0
         for definition in FIELDS:
             existing = fields.get(definition.name)
             wanted = options.get(definition.name)
+            in_order = existing is not None and not changed and existing["databaseId"] > newest
             same_type = existing is not None and existing["dataType"] == definition.data_type
-            if same_type and (wanted is None or [option["name"] for option in existing.get("options", [])] == [option for option, _ in wanted]):
+            if in_order and same_type and (wanted is None or [option["name"] for option in existing.get("options", [])] == [option for option, _ in wanted]):
+                newest = existing["databaseId"]
                 continue
             if existing:
                 self.query("delete_field", field=existing["id"])
             option_inputs = [{"name": option, "color": color, "description": ""} for option, color in wanted] if wanted is not None else None
             self.query("create_field", project=project["id"], name=definition.name, dataType=definition.data_type, options=option_inputs)
             changed = True
-        return self.find_project()[1] if changed else project
+        return (self.find_project()[1] if changed else project), changed
 
     def current_values(self, project_id: str) -> dict[str, tuple[str, dict[str, Any]]]:
         """Item id and field values (by field id) of each issue already in the project."""
