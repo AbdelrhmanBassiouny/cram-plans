@@ -26,6 +26,7 @@ from plans import (
     NextStep,
 )
 from project_views import VIEWS_API_VERSION, ProjectViews
+from pull_requests import CHECK_COLORS
 from up_next_issue import UpNextIssue
 
 QUERIES = Path(__file__).parent / "queries"
@@ -65,6 +66,7 @@ FIELDS = [
     FieldDefinition("Track", "SINGLE_SELECT", "track"),
     FieldDefinition("Branch", "TEXT", "branch"),
     FieldDefinition("Pull request", "NUMBER", "pull_request"),
+    FieldDefinition("CI", "SINGLE_SELECT", "checks"),
 ]
 """Every field the sync owns."""
 
@@ -99,7 +101,7 @@ class ProjectSync:
         board = PlanBoard(self.repository_client, self.repository, self.code_repository, ClaudeSessionLink(self.code_repository, self.session_environment))
         board.read(issues, track_names)
         viewer, project = self.ensure_project()
-        project = self.ensure_fields(project, self.options(board, track_names))
+        project = self.ensure_fields(project, self.options(board))
         fields = {entry["name"]: entry for entry in project["fields"]["nodes"] if entry}
         current = self.current_values(project["id"])
         writes = 0
@@ -113,13 +115,14 @@ class ProjectSync:
         print(f"{len(issues)} issue(s) in {project['url']}; {writes} field value(s) written; {rewritten} next step(s) rewritten; {views} view(s) created; {len(board.recommended)} item(s) recommended.")
 
     @staticmethod
-    def options(board: PlanBoard, track_names: dict[str, str]) -> dict[str, list[tuple[str, str]]]:
+    def options(board: PlanBoard) -> dict[str, list[tuple[str, str]]]:
         """Options and colours of each single-select field, in display order."""
         return {
             "Plan": [(name, "GRAY") for name in board.plan_names],
             "Plan status": [(status.title, STATUS_COLORS[status]) for status in ItemStatus],
             "Next": [(step.value, NEXT_STEP_COLORS[step]) for step in NextStep],
-            "Track": [(name, "BLUE") for name in sorted(set(track_names.values()))],
+            "Track": [(name, "BLUE") for name in board.tracks],
+            "CI": list(CHECK_COLORS.items()),
         }
 
     def query(self, document: str, **variables: Any) -> Any:

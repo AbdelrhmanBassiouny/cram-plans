@@ -11,6 +11,7 @@ from string import Template
 from github_client import GitHubClient
 from plan_board import IssueFields
 from plans import ITEM_MARKER
+from pull_requests import CheckRollup
 
 TEMPLATE = Path(__file__).parent / "templates" / "next_step.md"
 """Template of the block, between its two markers."""
@@ -49,7 +50,12 @@ class ItemNextStep:
 
     @staticmethod
     def line(item: IssueFields) -> str:
-        """The visible line: the step, why, and the session link."""
-        why = f" — {item.reason}" if item.reason else ""
-        link = f" · [▶ Open in Claude]({item.session_link})" if item.session_link else ""
-        return f"**Next: {item.next_step}**{why}{link}"
+        """The visible line: the step, why, the session link, then the pull request and its checks unless *Why* says they fail."""
+        parts = [f"**Next: {item.next_step}**" + (f" — {item.reason}" if item.reason else "")]
+        if item.session_link:
+            parts.append(f"[▶ Open in Claude]({item.session_link})")
+        if item.pull_request_url:
+            parts.append(f"[Pull request #{item.pull_request}]({item.pull_request_url})")
+        if item.checks and item.checks != CheckRollup.FAILURE.title:
+            parts.append(f"CI {item.checks.lower()}")
+        return " · ".join(parts)

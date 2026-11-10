@@ -33,8 +33,19 @@ class CheckRollup(StrEnum):
     ERROR = "ERROR"
 
 
+    @property
+    def title(self) -> str:
+        """The result as people read it."""
+        if self in FAILING_ROLLUPS:
+            return "Failing"
+        return "Passing" if self is CheckRollup.SUCCESS else "Pending"
+
+
 FAILING_ROLLUPS = {CheckRollup.FAILURE, CheckRollup.ERROR}
 """Check results that need the author."""
+
+CHECK_COLORS = {"Passing": "GREEN", "Pending": "YELLOW", "Failing": "RED"}
+"""Project colour of each check result, in option order."""
 
 CHANGES_REQUESTED = "CHANGES_REQUESTED"
 """Review state of a review that asks for changes."""

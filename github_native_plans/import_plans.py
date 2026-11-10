@@ -8,12 +8,14 @@ rewrites existing issues from ``plan.yaml`` again.
 from __future__ import annotations
 
 import argparse
+import itertools
 import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from string import Template
 from typing import Any
+from urllib.parse import quote
 
 from github_client import GitHubClient
 from plans import (
@@ -91,6 +93,19 @@ class SandboxIssues:
         self.client.rest("POST", f"/repos/{self.repository}/{path}", {field_name: linked_id})
 
 
+    def order(self, path: str, wanted: list[int]) -> None:
+        """Move the issues on the list at ``path`` into the order of ``wanted``; issues not in ``wanted`` go after them."""
+        if self.client is None:
+            return
+        current = [entry["id"] for entry in self.client.paginate(f"/repos/{self.repository}/{path}?per_page=100")]
+        if current[: len(wanted)] == wanted:
+            return
+        if current[0] != wanted[0]:
+            self.client.rest("PATCH", f"/repos/{self.repository}/{path}/priority", {"sub_issue_id": wanted[0], "before_id": current[0]})
+        for previous, issue in itertools.pairwise(wanted):
+            self.client.rest("PATCH", f"/repos/{self.repository}/{path}/priority", {"sub_issue_id": issue, "after_id": previous})
+
+
 # %% importer
 @dataclass
 class PlanImporter:
@@ -121,6 +136,7 @@ class PlanImporter:
             parent = self.issues.by_key[plan.identifier]["number"]
             for item in plan.items:
                 self.issues.link(f"issues/{parent}/sub_issues", "sub_issue_id", self.issues.by_key[item.key]["id"])
+            self.issues.order(f"issues/{parent}/sub_issues", [self.issues.by_key[item.key]["id"] for item in plan.stacked_items])
         for plan in plans:
             for item in plan.items:
                 for dependency in self.known_dependencies(item):
@@ -135,14 +151,16 @@ class PlanImporter:
             PLAN_LABEL: (LABEL_COLORS["plan"], "Issue that stands for a whole plan; its sub-issues are the items"),
         }
         wanted |= {status.label: (LABEL_COLORS["status"], status.title) for status in ItemStatus}
-        wanted |= {track.label: (LABEL_COLORS["track"], track.name) for plan in plans for track in plan.tracks}
+        wanted |= {track.label: (LABEL_COLORS["track"], track.section) for plan in plans for track in plan.tracks}
         client = self.issues.client
         if client is None:
             return
-        existing = {label["name"] for label in client.paginate(f"/repos/{self.issues.repository}/labels?per_page=100")}
+        existing = {label["name"]: label.get("description") or "" for label in client.paginate(f"/repos/{self.issues.repository}/labels?per_page=100")}
         for name, (color, description) in wanted.items():
             if name not in existing:
                 client.rest("POST", f"/repos/{self.issues.repository}/labels", {"name": name, "color": color, "description": description})
+            elif existing[name] != description:
+                client.rest("PATCH", f"/repos/{self.issues.repository}/labels/{quote(name, safe='')}", {"description": description})
 
     def should_write(self, key: str) -> bool:
         """Whether this run writes the issue for ``key``."""
@@ -153,41 +171,49 @@ class PlanImporter:
         if not self.should_write(plan.identifier):
             return
         repository = self.issues.repository
-        tracks = "\n".join(f"- `{track.label}` - {track.name} ({track.wave})" for track in plan.tracks)
+        number = self.issues.by_key[plan.identifier]["number"]
+        tracks = "\n".join(f"- `{track.label}` - {track.section}" for track in plan.tracks)
         former = f"{self.code_repository}#{plan.former_tracking_issue}" if plan.former_tracking_issue else "-"
+        prompts = Template((TEMPLATES / "plan_prompts.md").read_text()).substitute(repository=repository, number=number)
         body = Template((TEMPLATES / "plan_issue.md").read_text()).substitute(
             marker=plan.marker,
             description=self.qualify_references(plan.description),
             roadmap_url=f"https://github.com/{self.code_repository}/blob/{self.notes_branch}/.claude/personal/plans/{plan.identifier}/roadmap.md",
             former_tracking_issue=former,
-            tracks=tracks,
-            repository=repository,
-            number=self.issues.by_key[plan.identifier]["number"],
+            sections=self.collapsible_sections({"Tracks": tracks, "Prompts to copy": prompts}),
         )
         self.issues.write(plan.identifier, self.plan_title(plan), [SANDBOX_LABEL, PLAN_LABEL], body)
 
     def write_item(self, item: PlanItem) -> None:
-        """Render and write the item issue's body."""
+        """Render and write the item issue's body: its marker, then notes, blockers and links folded away."""
         if not self.should_write(item.key):
             return
-        repository = self.issues.repository
         blocked_by = [f"#{self.issues.by_key[dependency]['number']}" for dependency in self.known_dependencies(item)]
         blocked_by += [f"`{dependency}` (not imported)" for dependency in item.dependencies if dependency not in self.issues.by_key]
         branch = f"[`{item.branch}`](https://github.com/{self.code_repository}/tree/{item.branch})" if item.branch else "-"
-        body = Template((TEMPLATES / "item_issue.md").read_text()).substitute(
-            marker=item.marker,
+        links = Template((TEMPLATES / "item_links.md").read_text()).substitute(
             branch=branch,
             pull_request=f"{self.code_repository}#{item.pull_request_number}" if item.pull_request_number else "-",
             blocked_by=", ".join(blocked_by) or "-",
             session=f"[session]({item.session})" if item.session else "-",
-            notes=self.qualify_references(item.notes) or "-",
-            blockers="\n".join(f"- {self.qualify_references(blocker)}" for blocker in item.blockers) or "-",
-            repository=repository,
+            repository=self.issues.repository,
             number=self.issues.by_key[item.key]["number"],
             plan_identifier=item.plan_identifier,
             item_identifier=item.identifier,
         )
+        sections = {
+            "Notes": self.qualify_references(item.notes),
+            "Blockers": "\n".join(f"- {self.qualify_references(blocker)}" for blocker in item.blockers),
+            "Links and prompts": links,
+        }
+        body = Template((TEMPLATES / "item_issue.md").read_text()).substitute(marker=item.marker, sections=self.collapsible_sections(sections))
         self.issues.write(item.key, item.title, self.item_labels(item), body)
+
+    @staticmethod
+    def collapsible_sections(contents: dict[str, str]) -> str:
+        """One folded section per summary, in order, leaving out those with no content."""
+        template = Template((TEMPLATES / "details.md").read_text())
+        return "\n\n".join(template.substitute(summary=summary, content=content.strip()).strip() for summary, content in contents.items() if content.strip())
 
     def qualify_references(self, text: str) -> str:
         """``text`` with each bare ``#123`` pointed at the code repository, where it was written."""

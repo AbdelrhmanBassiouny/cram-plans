@@ -47,6 +47,8 @@ class IssueFields:
     """The item's branch."""
     pull_request: int | None = None
     """The item's pull request number."""
+    pull_request_repository: str | None = None
+    """``owner/name`` of the repository the pull request is in."""
     pull_request_state: PullRequest | None = None
     """What the item's pull request says, read live."""
     next_step: NextStep | None = None
@@ -68,6 +70,19 @@ class IssueFields:
     def status(self) -> str | None:
         """Option name of :attr:`item_status`."""
         return self.item_status.title if self.item_status else None
+
+    @property
+    def pull_request_url(self) -> str | None:
+        """Web address of the item's pull request."""
+        if self.pull_request is None:
+            return None
+        return f"https://github.com/{self.pull_request_repository}/pull/{self.pull_request}"
+
+    @property
+    def checks(self) -> str | None:
+        """The pull request's check result as people read it, ``None`` while it has none or is not read."""
+        state = self.pull_request_state
+        return state.checks.title if state and state.checks and state.state is PullRequestState.OPEN else None
 
     @property
     def reason(self) -> str | None:
@@ -102,6 +117,12 @@ class PlanBoard:
     def plan_names(self) -> list[str]:
         """Plan names in plan order."""
         return [issue["title"].removeprefix(PLAN_TITLE_PREFIX) for issue in self.plan_issues]
+
+    @property
+    def tracks(self) -> list[str]:
+        """Track names in the order the plans' items first show them."""
+        ordered = sorted((entry for entry in self.fields_by_number.values() if entry.track), key=lambda entry: (self.plan_names.index(entry.plan) if entry.plan in self.plan_names else len(self.plan_names), entry.order or 0))
+        return list(dict.fromkeys(entry.track for entry in ordered))
 
     @property
     def recommended(self) -> list[IssueFields]:
@@ -143,9 +164,10 @@ class PlanBoard:
             track=tracks[0] if len(tracks) == 1 else None,
             branch=branch.group(1) if branch else None,
             pull_request=int(pull_request.group(2)) if pull_request else None,
+            pull_request_repository=(pull_request.group(1) or self.code_repository) if pull_request else None,
         )
         if pull_request and entry.item_status not in (None, ItemStatus.DONE):
-            entry.pull_request_state = PullRequest.read(self.client, pull_request.group(1) or self.code_repository, entry.pull_request)
+            entry.pull_request_state = PullRequest.read(self.client, entry.pull_request_repository, entry.pull_request)
             if entry.pull_request_state.state is PullRequestState.MERGED:
                 entry.item_status = ItemStatus.DONE
         return entry

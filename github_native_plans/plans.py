@@ -143,6 +143,11 @@ class Track:
         """The issue label that puts an item on this track."""
         return TRACK_LABEL_PREFIX + self.identifier
 
+    @property
+    def section(self) -> str:
+        """The heading the plan page shows the track under: its wave, then its name."""
+        return f"{self.wave} · {self.name}" if self.wave else self.name
+
 
 @dataclass
 class PlanItem:
@@ -196,6 +201,8 @@ class Plan:
     """The issue basstler tracked the plan in."""
     tracks: list[Track]
     """The plan's tracks, in order."""
+    waves: list[str] = field(default_factory=list)
+    """Names of the plan's waves, in order."""
     items: list[PlanItem] = field(default_factory=list)
     """The plan's items, in order."""
 
@@ -219,9 +226,36 @@ class Plan:
             description=document.get("description", "").strip(),
             former_tracking_issue=document.get("tracking_issue"),
             tracks=list(tracks.values()),
+            waves=list(waves.values()),
         )
         plan.items = [plan.item_from_plan_yaml(entry, tracks) for entry in document["items"]]
         return plan
+
+    @property
+    def stacked_items(self) -> list[PlanItem]:
+        """The items in plan page order: wave by wave, track by track, each after the same-track item it depends on.
+
+        Items on a track outside every wave come last.
+        """
+        tracks = [track for wave in self.waves for track in self.tracks if track.wave == wave]
+        tracks += [track for track in self.tracks if track not in tracks]
+        return [item for track in tracks for item in self.track_stack(track)]
+
+    def track_stack(self, track: Track) -> list[PlanItem]:
+        """The items of ``track``, depth-first by their first dependency on the same track."""
+        track_items = [item for item in self.items if item.track == track]
+        keys = {item.key for item in track_items}
+        dependents: dict[str | None, list[PlanItem]] = {}
+        for item in track_items:
+            parent = next((dependency for dependency in item.dependencies if dependency in keys), None)
+            dependents.setdefault(parent, []).append(item)
+        ordered: list[PlanItem] = []
+        pending = list(reversed(dependents.get(None, [])))
+        while pending:
+            item = pending.pop()
+            ordered.append(item)
+            pending.extend(reversed(dependents.get(item.key, [])))
+        return ordered
 
     def item_from_plan_yaml(self, entry: dict, tracks: dict[str, Track]) -> PlanItem:
         """The item one ``items`` entry of ``plan.yaml`` describes."""

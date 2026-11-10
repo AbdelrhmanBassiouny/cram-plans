@@ -54,26 +54,11 @@ class ViewDefinition:
 
 VIEWS = [
     ViewDefinition(
-        name="Up next",
+        name="Plan",
         layout="table",
-        visible_fields=["Title", "Rank", "Next", "Why", "Session", "Command", "Plan", "Unblocks"],
-        sort_by=["Rank"],
-        filter="rank:>0",
-    ),
-    ViewDefinition(
-        name="Plans",
-        layout="table",
-        visible_fields=["Title", "Plan status", "Next", "Why", "Session", "Track", "Pull request"],
+        visible_fields=["Next", "Session", "Title", "Why", "Pull request", "CI", "Plan status", "Plan"],
         sort_by=["Order"],
-        group_by="Plan",
-    ),
-    ViewDefinition(
-        name="Board",
-        layout="board",
-        visible_fields=["Title", "Next", "Why", "Plan", "Pull request"],
-        sort_by=["Order"],
-        group_by="Plan",
-        columns_by="Plan status",
+        group_by="Track",
         filter="-label:plan",
     ),
 ]
@@ -93,17 +78,17 @@ class ProjectViews:
     def ensure(self, project: dict[str, Any], query: Any, recreate: bool) -> int:
         """Create the missing views, then drop GitHub's untouched first view; return how many were created.
 
-        With ``recreate``, the views of :data:`VIEWS` that exist are deleted first, so they are created anew.
+        With ``recreate``, every view is created anew and every view the project had is deleted.
         """
         existing = {view["name"]: view for view in project["views"]["nodes"]}
-        owned = {view.name for view in VIEWS}
-        if recreate:
-            for name in owned & existing.keys():
-                query("delete_view", view=existing.pop(name)["id"])
         field_ids = {entry["name"]: entry["databaseId"] for entry in project["fields"]["nodes"] if entry}
-        missing = [view for view in VIEWS if view.name not in existing]
+        missing = [view for view in VIEWS if recreate or view.name not in existing]
         for view in missing:
             self.client.rest("POST", f"/users/{self.owner_login}/projectsV2/{project['number']}/views", view.payload(field_ids))
+        if recreate:
+            for view in existing.values():
+                query("delete_view", view=view["id"])
+            return len(missing)
         default = existing.get(DEFAULT_VIEW_NAME)
         if missing and default and self.is_untouched(default):
             query("delete_view", view=default["id"])

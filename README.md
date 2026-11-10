@@ -14,13 +14,13 @@ them unchanged.
 | A plan | An issue titled `Plan: …`, labelled `plan` |
 | A plan item | A sub-issue of its plan's issue |
 | Status | One `status:*` label (`not-started`, `in-progress`, `blocked`, `deferred`, `done`); a closed issue counts as done |
-| Track | One `track:*` label; the label's description is the track's name |
+| Track | One `track:*` label; the label's description is the plan page heading, *wave · track* |
 | Dependencies | GitHub's native *blocked by* relationship, also listed in the body |
-| Branch, pull request, notes, blockers | The issue body |
+| Branch, pull request, notes, blockers | The issue body, each folded under its own heading (*Notes*, *Blockers*, *Links and prompts*) |
 | Copyable prompts | The issue body, keyed on the issue number, so they never need updating |
-| Plan order and item order | The plan issues' numbers, and each plan's sub-issue order (drag sub-issues to reorder) |
+| Plan order and item order | The plan issues' numbers, and each plan's sub-issue order: the import puts it in plan page order (wave, track, then each item after the same-track item it depends on); drag sub-issues to reorder |
 | The board | The user project *CRAM plans (GitHub-native sandbox)*, built from the issues |
-| What to do next | The pinned *Up next* issue and the project's *Up next* view |
+| What to do next | The pinned *Up next* issue, the project's *Next* column and the line at the top of each item issue |
 
 Every issue this sandbox owns carries the `github-native-sandbox` label, so
 `label:github-native-sandbox` finds them all and deleting them ends the trial.
@@ -38,11 +38,17 @@ The workflow `.github/workflows/github-native-plans.yml` has two steps:
    exists is never changed, so your own edits to a view stay; delete a view to get it back.
    It then rewrites the pinned *Up next* issue.
 
-### Views
+### The view
 
-- **Up next**: the recommended items, best first, with the command that takes each one.
-- **Plans**: every plan in order, its items in sub-issue order, like a plan page.
-- **Board**: columns by status, one swimlane per plan.
+The project has one view, *Plan*, laid out like a plan page: grouped by *wave · track* in
+plan page order, items in stack order. Its columns are *Next*, *Session*, the title, *Why*,
+*Pull request*, *CI*, *Plan status* and *Plan*. To see one plan, open *View options* →
+*Slice by* → *Plan* once and save the view, then pick the plan in the side list (or type
+`plan:"…"` into the filter).
+
+Project cells can't show a named link: a text field holds plain text, so *Session* shows
+the raw address. The named links (*▶ Open in Claude*, *Pull request #n*) are on the line at
+the top of each item issue, which opens beside the table when you click the title.
 
 ### The recommendation
 
@@ -71,7 +77,7 @@ closed, reopened) runs the sync, so the project follows the issues within a minu
 so. Reordering sub-issues, changing *blocked by*, and reviews, CI and merges in the code
 repository start no run; the next run picks them up, or press *Refresh now* in *Up next*.
 *sync-only* and *import-and-sync* can also be started from the Actions tab, where
-*recreate_views* rebuilds the three views.
+*recreate_views* deletes every view and creates the *Plan* view again.
 
 ## Working with it
 
