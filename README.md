@@ -40,13 +40,13 @@ The workflow `.github/workflows/github-native-plans.yml` has two steps:
 
 ### The view
 
-The project has one view, *Plan*, laid out like a plan page: grouped by *wave · track* in
-plan page order, items in stack order. Its columns are *Next*, *Session*, *CI*, *Pull request*
-(the pull request's address), the title, *Why* and *Plan*. To see one plan, open *View options* →
-*Slice by* → *Plan* once and save the view, then pick the plan in the side list (or type
-`plan:"…"` into the filter).
+The project has one view, *Plan*, a board laid out like a plan page: one column per
+*wave · track* in plan page order, each column's cards stacked in item order. Each card
+shows *Next*, *Session*, *CI*, *Pull request* (the pull request's address), *Why* and
+*Plan status*. To see one plan, open *View options* → *Slice by* → *Plan* once and save
+the view, then pick the plan in the side list (or type `plan:"…"` into the filter).
 
-Project cells can't show a named link: a text field holds plain text, so *Session* and
+Project fields can't show a named link: a text field holds plain text, so *Session* and
 *Pull request* show the raw address. The named links (*▶ Open in Claude*, *Pull request #n*) are on the line at
 the top of each item issue, which opens beside the table when you click the title.
 
