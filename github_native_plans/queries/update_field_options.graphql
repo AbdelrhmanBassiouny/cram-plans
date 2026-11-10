@@ -1,0 +1,5 @@
+mutation($field: ID!, $options: [ProjectV2SingleSelectFieldOptionInput!]) {
+  updateProjectV2Field(input: {fieldId: $field, singleSelectOptions: $options}) {
+    projectV2Field { ... on ProjectV2FieldCommon { id } }
+  }
+}

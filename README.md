@@ -46,7 +46,8 @@ The workflow `.github/workflows/github-native-plans.yml` has two steps:
   order, items in stack order. Columns: *Next*, *Session*, *CI*, *Pull request* (the pull
   request's address) and *Plan status*, after the title. GitHub shows a view's fields in
   the order they were created, whatever order the view asks for, so the sync recreates a
-  field that is out of order and then rebuilds the views; drag the title elsewhere by hand.
+  field that is out of order and then rebuilds the views, which resets column widths and
+  *Slice by*. New tracks or plans only change a field's options in place, so they keep both; drag the title elsewhere by hand.
 - **Plan board**, the plan page as cards: one column per *wave · track*, each column's
   cards stacked in item order. A card shows status, CI, *Why* and *Next*. Clicking a value
   on a card filters by it, so the links are left off the cards: click the card's title to

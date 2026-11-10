@@ -147,28 +147,30 @@ class ProjectSync:
         return self.find_project()
 
     def ensure_fields(self, project: dict[str, Any], options: dict[str, list[tuple[str, str]]]) -> tuple[dict[str, Any], bool]:
-        """The project with every field, and whether any was created.
+        """The project with every field, and whether any was created, which drops it from the views.
 
-        A field is recreated when its type or, for a single-select one, its options differ, or when it is
-        older than a field before it in :data:`FIELDS`.
+        A field is recreated when its type differs or when it is older than a field before it in
+        :data:`FIELDS`; a single-select field whose options differ gets them in place.
         """
         fields = {entry["name"]: entry for entry in project["fields"]["nodes"] if entry}
-        changed = False
+        created = False
+        options_changed = False
         newest = 0
         for definition in FIELDS:
             existing = fields.get(definition.name)
             wanted = options.get(definition.name)
-            in_order = existing is not None and not changed and existing["databaseId"] > newest
-            same_type = existing is not None and existing["dataType"] == definition.data_type
-            if in_order and same_type and (wanted is None or [option["name"] for option in existing.get("options", [])] == [option for option, _ in wanted]):
+            option_inputs = [{"name": option, "color": color, "description": ""} for option, color in wanted] if wanted is not None else None
+            if existing is not None and not created and existing["databaseId"] > newest and existing["dataType"] == definition.data_type:
                 newest = existing["databaseId"]
+                if wanted is not None and [option["name"] for option in existing["options"]] != [option for option, _ in wanted]:
+                    self.query("update_field_options", field=existing["id"], options=option_inputs)
+                    options_changed = True
                 continue
             if existing:
                 self.query("delete_field", field=existing["id"])
-            option_inputs = [{"name": option, "color": color, "description": ""} for option, color in wanted] if wanted is not None else None
             self.query("create_field", project=project["id"], name=definition.name, dataType=definition.data_type, options=option_inputs)
-            changed = True
-        return (self.find_project()[1] if changed else project), changed
+            created = True
+        return (self.find_project()[1] if created or options_changed else project), created
 
     def current_values(self, project_id: str) -> dict[str, tuple[str, dict[str, Any]]]:
         """Item id and field values (by field id) of each issue already in the project."""
