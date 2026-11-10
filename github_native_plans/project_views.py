@@ -64,7 +64,7 @@ VIEWS = [
     ViewDefinition(
         name="Plan board",
         layout="board",
-        visible_fields=["Plan status", "Pull request", "CI", "Why", "Next", "Session"],
+        visible_fields=["Plan status", "CI", "Why", "Next"],
         sort_by=["Order"],
         columns_by="Track",
         filter="-label:plan",
@@ -91,8 +91,10 @@ class ProjectViews:
         existing = {view["name"]: view for view in project["views"]["nodes"]}
         field_ids = {entry["name"]: entry["databaseId"] for entry in project["fields"]["nodes"] if entry}
         missing = [view for view in VIEWS if recreate or view.name not in existing]
+        field_names = {identifier: name for name, identifier in field_ids.items()}
         for view in missing:
-            self.client.rest("POST", f"/users/{self.owner_login}/projectsV2/{project['number']}/views", view.payload(field_ids))
+            created = self.client.rest("POST", f"/users/{self.owner_login}/projectsV2/{project['number']}/views", view.payload(field_ids))
+            print(f"View {view.name} created with fields {created.get('visible_fields')} ({field_names})")
         if recreate:
             for view in existing.values():
                 query("delete_view", view=view["id"])

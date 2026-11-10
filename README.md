@@ -44,8 +44,9 @@ The workflow `.github/workflows/github-native-plans.yml` has two steps:
   order, items in stack order. Columns: *Next*, *Session*, *CI*, *Pull request* (the pull
   request's address), the title and *Plan status*.
 - **Plan board**, the plan page as cards: one column per *wave · track*, each column's
-  cards stacked in item order. A card shows what a plan page card does, in the same order:
-  status, pull request, CI, *Why*, then *Next* and *Session* in place of the action button.
+  cards stacked in item order. A card shows status, CI, *Why* and *Next*. Clicking a value
+  on a card filters by it, so the links are left off the cards: click the card's title to
+  open the issue, whose top line has *▶ Open in Claude* and the pull request link.
 
 To see one plan, open *View options* → *Slice by* → *Plan* once in each view and save it,
 then pick the plan in the side list (or type `plan:"…"` into the filter).
